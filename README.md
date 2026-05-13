@@ -1,2 +1,2 @@
 # ChurchPresentationProgram
-probbaly just an mvp
+probably just an mvp
