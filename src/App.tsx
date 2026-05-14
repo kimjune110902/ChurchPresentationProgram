@@ -1,14 +1,138 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { useAppStore } from "./store/useAppStore";
 import "./App.css";
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { auth, presentation } = useAppStore();
 
-  // Layout state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">("login");
+
   const leftPanelWidth = 220;
   const rightPanelWidth = 280;
 
-  if (!isAuthenticated) {
+  // Dummy slides for the grid to interact with
+  const slides = [
+    { id: "1", title: "Slide 1" },
+    { id: "2", title: "Slide 2" },
+    { id: "3", title: "Slide 3" },
+    { id: "4", title: "Slide 4" }
+  ];
+
+  useEffect(() => {
+    // Check session on mount
+    async function checkSession() {
+      try {
+        const response: any = await invoke("check_session");
+        if (response.success && response.user) {
+          auth.login(response.user);
+        }
+      } catch (err) {
+        console.error("Session check failed", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkSession();
+  }, []);
+
+  const isValidEmailOrPhone = (val: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^\+?[0-9\s\-]{7,15}$/;
+    return emailRegex.test(val) || phoneRegex.test(val);
+  };
+
+  const handleLogin = async () => {
+    setAuthError("");
+
+    if (!email || !password) {
+      setAuthError("Email and password are required.");
+      return;
+    }
+
+    if (!isValidEmailOrPhone(email)) {
+      setAuthError("Please enter a valid email or phone number.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setAuthError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response: any = await invoke("login_user", { email, password });
+      if (response.success && response.user) {
+        auth.login(response.user);
+      } else {
+        setAuthError(response.message || "Login failed");
+      }
+    } catch (err: any) {
+      setAuthError(err.toString());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    setAuthError("");
+
+    if (!email || !password || !username) {
+      setAuthError("All fields are required.");
+      return;
+    }
+
+    if (!isValidEmailOrPhone(email)) {
+      setAuthError("Please enter a valid email or phone number.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setAuthError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response: any = await invoke("signup_user", { email, password, username });
+      if (response.success && response.user) {
+        auth.login(response.user);
+      } else {
+        setAuthError(response.message || "Signup failed");
+      }
+    } catch (err: any) {
+      setAuthError(err.toString());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    if (!isValidEmailOrPhone(email)) {
+      setAuthError("Please enter a valid email to reset your password.");
+      return;
+    }
+    setLoading(true);
+    // Simulate a forgot password delay since we have no backend to actually email
+    setTimeout(() => {
+      setAuthError("If an account with that email exists, a reset link has been sent.");
+      setLoading(false);
+    }, 1500);
+  };
+
+  if (loading && !auth.isAuthenticated && email === "") {
+    return <div className="flex items-center justify-center h-screen bg-[#0D0D0D] text-white">Loading...</div>;
+  }
+
+  if (!auth.isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0D0D0D]">
         <div className="w-[420px] bg-[#1E1E1E] border border-[#333333] rounded-xl p-10 shadow-[0_24px_64px_rgba(0,0,0,0.8)] flex flex-col items-center">
@@ -17,47 +141,106 @@ function App() {
           <p className="text-[13px] text-[#888888] mb-8">Professional Church Media Production</p>
 
           <div className="w-full flex flex-col gap-4">
+            {authMode === "signup" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-[#999999]">Username / Name</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Your Name"
+                  className="h-10 bg-[#161616] border border-[#333333] rounded-md text-sm text-[#EAEAEA] px-3 focus:border-[#1A56DB] focus:outline-none placeholder-[#444444]"
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-1">
               <label className="text-[11px] text-[#999999]">Phone number or email</label>
               <input
                 type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="+82 10 1234 5678 or email@example.com"
                 className="h-10 bg-[#161616] border border-[#333333] rounded-md text-sm text-[#EAEAEA] px-3 focus:border-[#1A56DB] focus:outline-none placeholder-[#444444]"
               />
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] text-[#999999]">Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className="h-10 bg-[#161616] border border-[#333333] rounded-md text-sm text-[#EAEAEA] px-3 focus:border-[#1A56DB] focus:outline-none placeholder-[#444444]"
-              />
-              <div className="flex justify-end mt-1">
-                <a href="#" className="text-[11px] text-[#4A90E2] hover:underline">Forgot password?</a>
+            {authMode !== "forgot" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-[#999999]">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-10 bg-[#161616] border border-[#333333] rounded-md text-sm text-[#EAEAEA] px-3 focus:border-[#1A56DB] focus:outline-none placeholder-[#444444]"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { authMode === "login" ? handleLogin() : handleSignup(); } }}
+                />
+
+                {authMode === "login" && (
+                  <div className="flex justify-end mt-1">
+                    <button onClick={() => setAuthMode("forgot")} className="text-[11px] text-[#4A90E2] hover:underline bg-transparent border-none cursor-pointer p-0">Forgot password?</button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            <button
-              className="w-full h-10 bg-[#1A56DB] text-white rounded-md text-sm font-semibold hover:bg-[#1E63F5] transition-colors mt-2"
-              onClick={() => setIsAuthenticated(true)}
-            >
-              Log In
-            </button>
+            {authError && <span className="text-red-500 text-xs mt-1">{authError}</span>}
 
-            <div className="flex items-center my-2">
-              <div className="flex-1 border-t border-[#2A2A2A]"></div>
-              <span className="px-2 text-[11px] text-[#555555]">or</span>
-              <div className="flex-1 border-t border-[#2A2A2A]"></div>
-            </div>
+            {authMode === "login" && (
+              <button
+                className="w-full h-10 bg-[#1A56DB] text-white rounded-md text-sm font-semibold hover:bg-[#1E63F5] transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                onClick={handleLogin}
+                disabled={loading || !email || password.length < 8}
+              >
+                {loading ? "Logging in..." : "Log In"}
+              </button>
+            )}
 
-            <button className="w-full h-10 bg-[#2A2A2A] border border-[#444444] rounded-md text-sm text-[#EAEAEA] hover:bg-[#333333] transition-colors flex items-center justify-center gap-2">
-              <span>Continue with Google</span>
-            </button>
+            {authMode === "signup" && (
+              <button
+                className="w-full h-10 bg-[#1A56DB] text-white rounded-md text-sm font-semibold hover:bg-[#1E63F5] transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                onClick={handleSignup}
+                disabled={loading || !email || !username || password.length < 8}
+              >
+                {loading ? "Creating Account..." : "Sign Up"}
+              </button>
+            )}
+
+            {authMode === "forgot" && (
+              <button
+                className="w-full h-10 bg-[#1A56DB] text-white rounded-md text-sm font-semibold hover:bg-[#1E63F5] transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                onClick={handleForgotPassword}
+                disabled={loading || !email}
+              >
+                {loading ? "Sending..." : "Reset Password"}
+              </button>
+            )}
+
+            {authMode === "login" && (
+              <>
+                <div className="flex items-center my-2">
+                  <div className="flex-1 border-t border-[#2A2A2A]"></div>
+                  <span className="px-2 text-[11px] text-[#555555]">or</span>
+                  <div className="flex-1 border-t border-[#2A2A2A]"></div>
+                </div>
+
+                <button
+                  className="w-full h-10 bg-[#2A2A2A] border border-[#444444] rounded-md text-sm text-[#EAEAEA] hover:bg-[#333333] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => openUrl('https://syncsanctuary.app/auth/google/desktop-callback')}
+                >
+                  <span>Continue with Google</span>
+                </button>
+              </>
+            )}
           </div>
 
           <div className="mt-8 text-center text-[12px] text-[#888888]">
-            Don't have an account? <a href="#" className="text-[#4A90E2] hover:underline">Sign up</a>
+            {authMode === "login" ? (
+              <>Don't have an account? <button onClick={() => setAuthMode("signup")} className="text-[#4A90E2] hover:underline bg-transparent border-none cursor-pointer p-0">Sign up</button></>
+            ) : (
+              <>Already have an account? <button onClick={() => setAuthMode("login")} className="text-[#4A90E2] hover:underline bg-transparent border-none cursor-pointer p-0">Log in</button></>
+            )}
           </div>
         </div>
       </div>
@@ -95,8 +278,8 @@ function App() {
         <div className="flex flex-col items-center justify-center p-1 border border-[#2A2A2A] rounded bg-[#0D0D0D]">
           <span className="text-[9px] text-[#555555] uppercase tracking-[1px] mb-0.5">Clear</span>
           <div className="flex gap-1">
-            <button className="w-6 h-6 rounded-sm bg-white hover:brightness-120 cursor-pointer" title="Clear All Layers"></button>
-            <button className="w-6 h-6 rounded-sm bg-[#FF6B00] hover:brightness-120 cursor-pointer" title="Clear Slide"></button>
+            <button className="w-6 h-6 rounded-sm bg-white hover:brightness-120 cursor-pointer" title="Clear All Layers" onClick={() => presentation.setActiveSlide(null)}></button>
+            <button className="w-6 h-6 rounded-sm bg-[#FF6B00] hover:brightness-120 cursor-pointer" title="Clear Slide" onClick={() => presentation.setActiveSlide(null)}></button>
             <button className="w-6 h-6 rounded-sm bg-[#00B4D8] hover:brightness-120 cursor-pointer" title="Clear Media"></button>
             <button className="w-6 h-6 rounded-sm bg-[#2ECC71] hover:brightness-120 cursor-pointer" title="Clear Audio"></button>
             <button className="w-6 h-6 rounded-sm bg-[#F1C40F] hover:brightness-120 cursor-pointer" title="Clear Announcements"></button>
@@ -157,13 +340,21 @@ function App() {
         </div>
         <div className="flex-1 overflow-y-auto p-4 bg-[#141414]">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-            {/* Slide thumbnails stub */}
-            <div className="aspect-video bg-[#080808] border-[1.5px] border-[#222222] rounded flex flex-col">
-              <div className="flex-1 flex items-center justify-center text-white text-xl font-bold">Slide 1</div>
-            </div>
-            <div className="aspect-video bg-[#080808] border-[1.5px] border-[#222222] rounded flex flex-col">
-              <div className="flex-1 flex items-center justify-center text-white text-xl font-bold">Slide 2</div>
-            </div>
+            {slides.map(slide => (
+              <div
+                key={slide.id}
+                onClick={() => presentation.setActiveSlide(slide.id)}
+                className={`aspect-video bg-[#080808] border-[1.5px] rounded flex flex-col cursor-pointer transition-colors ${
+                  presentation.activeSlideId === slide.id
+                    ? 'border-[#1A56DB] shadow-[0_0_0_1px_#1A56DB]'
+                    : 'border-[#222222] hover:border-[#444444]'
+                }`}
+              >
+                <div className="flex-1 flex items-center justify-center text-white text-xl font-bold">
+                  {slide.title}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -175,11 +366,17 @@ function App() {
             <span className="text-[10px] text-[#555555]">Audience</span>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-[#333333]">1920×1080</span>
-              <div className="w-2 h-2 rounded-full bg-[#333333]"></div>
+              <div className={`w-2 h-2 rounded-full ${presentation.activeSlideId ? 'bg-[#E03A2F]' : 'bg-[#333333]'}`}></div>
             </div>
           </div>
           <div className="flex-1 m-1 border border-[#222222] bg-black flex items-center justify-center text-[11px] text-[#333333]">
-            No Output
+            {presentation.activeSlideId ? (
+              <span className="text-white text-2xl font-bold">
+                {slides.find(s => s.id === presentation.activeSlideId)?.title}
+              </span>
+            ) : (
+              "No Output"
+            )}
           </div>
         </div>
         <div className="h-[30%] bg-[#111111] border-b border-[#1A1A1A]">
