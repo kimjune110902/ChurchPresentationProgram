@@ -48,8 +48,11 @@ function App() {
     return emailRegex.test(val) || phoneRegex.test(val);
   };
 
+  const [accountRestored, setAccountRestored] = useState(false);
+
   const handleLogin = async () => {
     setAuthError("");
+    setAccountRestored(false);
 
     if (!email || !password) {
       setAuthError("Email and password are required.");
@@ -70,9 +73,24 @@ function App() {
     try {
       const response: any = await invoke("login_user", { email, password });
       if (response.success && response.user) {
+        if (response.account_restored) {
+          setAccountRestored(true);
+        }
         auth.login(response.user);
       } else {
-        setAuthError(response.message || "Login failed");
+        if (response.error_code === "TOKEN_REVOKED") {
+          setAuthError("Your session expired or your password was changed. Please log in again.");
+        } else if (response.error_code === "ACCOUNT_LOCKED") {
+          setAuthError(`Account locked. Try again after ${response.locked_until || 'a few minutes'}.`);
+        } else if (response.error_code === "CLIENT_OUTDATED") {
+          setAuthError("Client outdated. Please update your application.");
+        } else if (response.error_code === "USER_INACTIVE") {
+          setAuthError("Your account is scheduled for deletion. Log in with your password to cancel.");
+        } else if (response.error_code === "TOKEN_THEFT_DETECTED") {
+          setAuthError("Security Alert: Session terminated.");
+        } else {
+          setAuthError(response.message || "Login failed");
+        }
       }
     } catch (err: any) {
       setAuthError(err.toString());
@@ -82,50 +100,13 @@ function App() {
   };
 
   const handleSignup = async () => {
-    setAuthError("");
-
-    if (!email || !password || !username) {
-      setAuthError("All fields are required.");
-      return;
-    }
-
-    if (!isValidEmailOrPhone(email)) {
-      setAuthError("Please enter a valid email or phone number.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setAuthError("Password must be at least 8 characters.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response: any = await invoke("signup_user", { email, password, username });
-      if (response.success && response.user) {
-        auth.login(response.user);
-      } else {
-        setAuthError(response.message || "Signup failed");
-      }
-    } catch (err: any) {
-      setAuthError(err.toString());
-    } finally {
-      setLoading(false);
-    }
+    // Signup delegation to web platform per new directive
+    openUrl('https://syncsanctuary.app/auth/signup');
   };
 
   const handleForgotPassword = async () => {
-    setAuthError("");
-    if (!isValidEmailOrPhone(email)) {
-      setAuthError("Please enter a valid email to reset your password.");
-      return;
-    }
-    setLoading(true);
-    // Simulate a forgot password delay since we have no backend to actually email
-    setTimeout(() => {
-      setAuthError("If an account with that email exists, a reset link has been sent.");
-      setLoading(false);
-    }, 1500);
+    // Password reset delegation to web platform per new directive
+    openUrl('https://syncsanctuary.app/password-reset');
   };
 
   if (loading && !auth.isAuthenticated && email === "") {
@@ -135,7 +116,12 @@ function App() {
   if (!auth.isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0D0D0D]">
-        <div className="w-[420px] bg-[#1E1E1E] border border-[#333333] rounded-xl p-10 shadow-[0_24px_64px_rgba(0,0,0,0.8)] flex flex-col items-center">
+        <div className="w-[420px] bg-[#1E1E1E] border border-[#333333] rounded-xl p-10 shadow-[0_24px_64px_rgba(0,0,0,0.8)] flex flex-col items-center relative">
+          {accountRestored && (
+            <div className="absolute top-0 left-0 w-full bg-green-600 text-white text-xs font-semibold py-2 px-4 rounded-t-xl text-center">
+              Welcome back! Your account deletion has been cancelled.
+            </div>
+          )}
           <div className="w-16 h-16 bg-[#1A56DB] rounded-full mb-4"></div>
           <h1 className="text-2xl font-bold text-[#EAEAEA] mb-1">SyncSanctuary</h1>
           <p className="text-[13px] text-[#888888] mb-8">Professional Church Media Production</p>

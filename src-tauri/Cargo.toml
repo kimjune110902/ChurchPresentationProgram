@@ -23,8 +23,9 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "3.0.4"
-argon2 = "0.5.3"
 rand = "0.10.1"
 tauri-plugin-shell = "2.3.5"
 uuid = { version = "1.23.1", features = ["v4"] }
-rand_core = { version = "0.6.4", features = ["getrandom"] }
+reqwest = { version = "0.13.3", features = ["json"] }
+jsonwebtoken = "10.4.0"
+tokio = { version = "1.52.3", features = ["full"] }
